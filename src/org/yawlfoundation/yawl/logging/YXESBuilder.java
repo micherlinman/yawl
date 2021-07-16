@@ -32,6 +32,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Hashtable;
 import java.util.Map;
+import java.util.List;
 
 /**
  * Author: Michael Adams
@@ -375,7 +376,7 @@ public class YXESBuilder {
     
     
         for (XNode event: taskInstance.getChildren("event")) {
-            String descriptor = getDescriptor(event);
+            String descriptor = event.getChildText("descriptor");
             if (_ignoreUnknownEvents && "unknown".equals(descriptor)) {
                 continue;
             }
@@ -411,7 +412,7 @@ public class YXESBuilder {
             if (event.hasChild("dataItems")) {
                 XNode items = event.getChild("dataItems");
 
-                switch (getDescriptor(event)) {
+                switch (event.getChildText("descriptor")) {
 
                     case "DataValueChange":
                         addDataValueChangedData(items, dvcDataItems);
@@ -447,10 +448,10 @@ public class YXESBuilder {
         XNode dataCaseComplLog = eventDataItems.getChild("caseComplDataItems");
 
         if (descriptor.equals("CaseStart")) {
-            addChildToTrace(trace, descriptor, getTraceLogValue(dataCaseStartLog));
+            addChildToTrace(trace, descriptor, getLogText(dataCaseStartLog));
          } 
          if (descriptor.equals("CaseComplete")) {
-            addChildToTrace(trace, descriptor, getTraceLogValue(dataCaseComplLog));
+            addChildToTrace(trace, descriptor, getLogText(dataCaseComplLog));
           } 
     }
 
@@ -470,7 +471,11 @@ public class YXESBuilder {
             addDataEvents(node, dataExecutionLog);
         } 
         if (descriptor.equals("Complete")) {
-            addDataEvents(node, dataChanges.getChild("output"));
+
+            XNode ouput = dataChanges.getChild("output");
+
+            renameLogKey(ouput);
+            addDataEvents(node, ouput);
             addDataEvents(node, dataCompleteLog);
         }
     }
@@ -480,23 +485,38 @@ public class YXESBuilder {
         XNode dvcOutputs = dvcDataItems.getChild("output");
 
         for (XNode item: items.getChildren()) {
-            if (getDescriptor(item).startsWith("Input")) {
+            if (item.getChildText("descriptor").startsWith("Input")) {
                 dvcInputs.addChild(item);
             } else dvcOutputs.addChild(item);
         }
     }
 
-    private String getDescriptor(XNode node) {
-        return node.getChildText("descriptor");
+    private void renameLogKey(XNode dataXNode){
+
+            List<XNode> items = dataXNode.getChildren();
+
+            for(XNode item : items) {
+                String descriptor = item.getChildText("descriptor");
+                String itemName = item.getChildText("name");
+
+                if(descriptor.equals("PredicateStart")) {
+                    item.updateChildName("name", itemName + "_start_log");
+                }
+                if(descriptor.equals("PredicateComplete")){
+                    item.updateChildName("name", itemName + "_complete_log");
+                }
+            }
     }
 
     private void addLogEntry(XNode item, XNode dataXNode){
-        XNode subitem = item.getChild("dataItem");
-        subitem.updateChildName("name", "logentry");
-        dataXNode.addChild(subitem);
+        if(!dataXNode.hasChild("dataItem")) {
+            XNode subitem = item.getChild("dataItem");
+            subitem.updateChildName("name", "logentry");
+            dataXNode.addChild(subitem);
+        }
     }
 
-    private String getTraceLogValue(XNode eventData) {
+    private String getLogText(XNode eventData) {
         if(eventData.getChild("dataItem") != null) {
             XNode di = eventData.getChild("dataItem");
             return di.getChildText("value");

@@ -338,9 +338,12 @@ public class YWorkItem {
                     }
                     result.add(new YLogDataItem(descriptor, name, value, dataType));
 
-                    // add any configurable logging predicates for this parameter
-                    YLogDataItem dataItem = getDataLogPredicate(param, input);
-                    if (dataItem != null) result.add(dataItem);
+                    if(!input) {
+                        YLogDataItem dataItemIn = getDataLogPredicate(param, true);
+                        YLogDataItem dataItemOut = getDataLogPredicate(param, false);
+                        if (dataItemIn != null) result.add(dataItemIn);
+                        if (dataItemOut != null) result.add(dataItemOut);
+                    }
                 }    
             }
         }
@@ -1012,7 +1015,11 @@ public class YWorkItem {
             String predicate = input ? logPredicate.getParsedStartPredicate(param) :
                     logPredicate.getParsedCompletionPredicate(param);
             if (predicate != null) {
-                dataItem = new YLogDataItem("Predicate", param.getPreferredName(), predicate, "string");
+                if(input) {
+                    dataItem = new YLogDataItem("PredicateStart", param.getPreferredName(), predicate, "string");
+                } else {
+                    dataItem = new YLogDataItem("PredicateComplete", param.getPreferredName(), predicate, "string");
+                }
             }
         }
         return dataItem ;

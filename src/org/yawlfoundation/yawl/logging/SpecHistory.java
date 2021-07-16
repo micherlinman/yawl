@@ -49,7 +49,7 @@ public class SpecHistory {
             " FROM YLogNetInstance ni, YLogTaskInstance ti, YLogEvent e," +
             " YLogDataItemInstance di, YLogDataType dt" +
             " WHERE e.instanceID = ti.taskInstanceID" +
-            " AND (e.descriptor='DataValueChange' or di.descriptor = 'Predicate')" +
+            " AND (e.descriptor='DataValueChange' or di.descriptor like 'Predicate%')" +
             " AND di.eventID=e.eventID" +
             " AND dt.dataTypeID=di.dataTypeID" +
             " AND e.rootNetInstanceID = ni.netInstanceID" +
