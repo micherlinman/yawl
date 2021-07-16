@@ -26,6 +26,7 @@ import org.yawlfoundation.yawl.schema.XSDType;
 import org.yawlfoundation.yawl.util.JDOMUtil;
 import org.yawlfoundation.yawl.util.XNode;
 import org.yawlfoundation.yawl.util.XNodeParser;
+import org.yawlfoundation.yawl.logging.YEventLogger;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -369,45 +370,94 @@ public class YXESBuilder {
     private void processTaskEvents(XNode taskInstance, XNode trace) {
         String taskName = taskInstance.getChildText("taskname");
         String instanceID = taskInstance.getChildText("engineinstanceid");
-        XNode dataChanges = extractDataChangeEvents(taskInstance);
-        for (XNode event : taskInstance.getChildren("event")) {
+    
+        XNode eventDataItems = extractDataEvents(taskInstance);
+    
+        XNode dataChanges = eventDataItems.getChild("dvcDataItems");
+        XNode dataExecution = eventDataItems.getChild("excecutingDataItems");
+        XNode dataComplete = eventDataItems.getChild("completeDataItems");
+    
+        for (XNode event: taskInstance.getChildren("event")) {
             String descriptor = getDescriptor(event);
             if (_ignoreUnknownEvents && "unknown".equals(descriptor)) {
                 continue;
             }
             if (!descriptor.equals("DataValueChange")) {
                 XNode node = eventNode(event, taskName, instanceID);
+
                 if (descriptor.equals("Executing")) {
                     addDataEvents(node, dataChanges.getChild("input"));
-                } else if (descriptor.equals("Complete")) {
+                    addDataEvents(node, dataExecution);
+                } 
+                
+                if (descriptor.equals("Complete")) {
                     addDataEvents(node, dataChanges.getChild("output"));
+                    addDataEvents(node, dataComplete);
                 }
                 trace.addChild(node);
             }
         }
     }
+    
+    private boolean hasLogEntries(XNode dataXNode) {
+        return dataXNode.hasChild("output");
+    }
+    
+    private XNode extractDataEvents(XNode taskInstance) {
+        XNode data = new XNode("eventData");
+
+        XNode dvcDataItems = data.addChild("dvcDataItems");
+        XNode dvcInputs = dvcDataItems.addChild("input");
+        XNode dvcOutputs = dvcDataItems.addChild("output");
+
+        XNode execDataItems = data.addChild("excecutingDataItems");
+        XNode complDataItems = data.addChild("completeDataItems");
 
 
-    private XNode extractDataChangeEvents(XNode taskInstance) {
-        XNode node = new XNode("dataItems");
-        XNode inputs = node.addChild("input");
-        XNode outputs = node.addChild("output");
-        for (XNode event : taskInstance.getChildren("event")) {
-            if (getDescriptor(event).equals("DataValueChange")) {
+        for (XNode event: taskInstance.getChildren("event")) {
+            if (event.hasChild("dataItems")) {
                 XNode items = event.getChild("dataItems");
-                for (XNode item : items.getChildren()) {
-                    if (getDescriptor(item).startsWith("Input")) {
-                        inputs.addChild(item);
-                    } else outputs.addChild(item);
+
+                switch (getDescriptor(event)) {
+
+                    case "DataValueChange":
+                        addDataValueChangedData(items, dvcDataItems);
+                        break;
+
+                    case "Executing":
+                        addLogEntry(items, execDataItems);
+                        break;
+
+                    case "Complete":
+                        addLogEntry(items, complDataItems);
+                        break;
                 }
             }
         }
-        return node;
+        return data;
     }
 
+    private void addDataValueChangedData(XNode items, XNode dvcDataItems) {
+        XNode dvcInputs = dvcDataItems.getChild("input");
+        XNode dvcOutputs = dvcDataItems.getChild("output");
+
+        for (XNode item: items.getChildren()) {
+            if (getDescriptor(item).startsWith("Input")) {
+                dvcInputs.addChild(item);
+            } else dvcOutputs.addChild(item);
+        }
+    }
 
     private String getDescriptor(XNode node) {
         return node.getChildText("descriptor");
+    }
+
+    private void addLogEntry(XNode item, XNode dataXNode){
+        if(!dataXNode.hasChild("dataItem")) {
+            XNode subitem = item.getChild("dataItem");
+            subitem.updateChildName("name", "logentry");
+            dataXNode.addChild(subitem);
+        }
     }
 
 }

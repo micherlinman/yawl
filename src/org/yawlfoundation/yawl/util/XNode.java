@@ -737,4 +737,8 @@ public class XNode implements Comparable<XNode> {
         return _contentType;
     }
 
+    public void updateChildName(String oldName, String newName) {
+        this.removeChild(this.getChild(oldName));
+        this.addChild(oldName, newName);
+    }
 }

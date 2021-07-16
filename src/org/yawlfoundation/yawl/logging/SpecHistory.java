@@ -48,7 +48,7 @@ public class SpecHistory {
             " FROM YLogNetInstance ni, YLogTaskInstance ti, YLogEvent e," +
             " YLogDataItemInstance di, YLogDataType dt" +
             " WHERE e.instanceID = ti.taskInstanceID" +
-            " AND e.descriptor='DataValueChange'" +
+            " AND (e.descriptor='DataValueChange' or ((e.descriptor='Executing' or e.descriptor='Complete') and di.descriptor = 'Predicate'))" +
             " AND di.eventID=e.eventID" +
             " AND dt.dataTypeID=di.dataTypeID" +
             " AND e.rootNetInstanceID = ni.netInstanceID" +
@@ -95,14 +95,22 @@ public class SpecHistory {
                     task, taskInstance.getEngineInstanceID());
 
             String eventDescriptor = eventInstance.getDescriptor();
-
+            
             // don't include data change events if withData is false
             if (withData || (!eventDescriptor.equals("DataValueChange"))) {
                 XNode eventNode = getOrCreateEventNode(taskNode, eventInstance.getEventID(),
                         eventDescriptor, eventInstance.getTimestampString());
-                if (eventDescriptor.equals("DataValueChange")) {
+
+                boolean eventHasLogEntries = _dataMap.get(eventNode.getAttributeValue("id")) != null;
+
+                if (eventDescriptor.equals("DataValueChange")) { 
                     addDataNodes(eventNode);
-               }
+                }
+                if (eventDescriptor.equals("Executing") || eventDescriptor.equals("Complete")) { 
+                    if(eventHasLogEntries) {
+                        addDataNodes(eventNode);
+                    }
+                }
             }
         }
 
