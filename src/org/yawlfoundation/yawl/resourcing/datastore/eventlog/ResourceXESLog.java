@@ -140,7 +140,7 @@ public class ResourceXESLog extends YXESBuilder {
     private XNode mergeLogs(XNode engLog, XNode rsLog) {
         Map<String, XNode> rsCaseMap = buildCaseMap(rsLog);
         for (XNode trace : engLog.getChildren("trace")) {
-            String caseID = trace.getChild("string").getAttributeValue("value");
+            String caseID = trace.getChildByKey("concept:name").getAttributeValue("value");
             if (rsCaseMap.containsKey(caseID)) {
                 mergeTraces(trace, rsCaseMap.get(caseID));
                 trace.sort(new XESTimestampComparator());

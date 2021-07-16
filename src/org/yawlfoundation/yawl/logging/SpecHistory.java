@@ -35,28 +35,38 @@ public class SpecHistory {
 
     private final Map<String, Set<Object[]>> _dataMap = new HashMap<String, Set<Object[]>>();
     private final Logger _log = LogManager.getLogger(this.getClass());
+    private final List<String> eventDescriptorsWithData = new ArrayList<String>();
 
     private static final String EVENT_QUERY = "select ni,ti,e,t" +
             " FROM YLogNetInstance ni, YLogTaskInstance ti, YLogEvent e, YLogTask t" +
             " WHERE e.instanceID = ti.taskInstanceID" +
             " AND t.taskID = ti.taskID"+
             " AND e.rootNetInstanceID = ni.netInstanceID" +
-            " AND NOT e.descriptor in ('CaseStart','CaseComplete', 'NetStart', 'NetComplete')" +
+            " AND NOT e.descriptor in ('NetStart', 'NetComplete')" +
             " AND ni.netID = (:id)";
 
     private static final String DATA_QUERY = "select di,dt" +
             " FROM YLogNetInstance ni, YLogTaskInstance ti, YLogEvent e," +
             " YLogDataItemInstance di, YLogDataType dt" +
             " WHERE e.instanceID = ti.taskInstanceID" +
-            " AND (e.descriptor='DataValueChange' or ((e.descriptor='Executing' or e.descriptor='Complete') and di.descriptor = 'Predicate'))" +
+            " AND (e.descriptor='DataValueChange' or di.descriptor = 'Predicate')" +
             " AND di.eventID=e.eventID" +
             " AND dt.dataTypeID=di.dataTypeID" +
             " AND e.rootNetInstanceID = ni.netInstanceID" +
             " AND ni.netID = (:id)";
 
 
-    public SpecHistory() {  }
+    public SpecHistory() { 
+        setEventDescriptorsWithData();
+     }
 
+    private void setEventDescriptorsWithData() {
+        eventDescriptorsWithData.add("Executing");
+        eventDescriptorsWithData.add("Complete");
+        eventDescriptorsWithData.add("CaseComplete");
+        eventDescriptorsWithData.add("CaseStart");
+        eventDescriptorsWithData.add("DataValueChange");
+    }
 
     public XNode get(HibernateEngine logDb, long specKey, boolean withData) {
         processDataResults(getDataEvents(logDb, specKey));
@@ -95,19 +105,15 @@ public class SpecHistory {
                     task, taskInstance.getEngineInstanceID());
 
             String eventDescriptor = eventInstance.getDescriptor();
-            
             // don't include data change events if withData is false
             if (withData || (!eventDescriptor.equals("DataValueChange"))) {
                 XNode eventNode = getOrCreateEventNode(taskNode, eventInstance.getEventID(),
                         eventDescriptor, eventInstance.getTimestampString());
 
-                boolean eventHasLogEntries = _dataMap.get(eventNode.getAttributeValue("id")) != null;
+                if(eventDescriptorsWithData.contains(eventDescriptor)) {
+                    boolean hasData = _dataMap.get(eventNode.getAttributeValue("id")) != null;
 
-                if (eventDescriptor.equals("DataValueChange")) { 
-                    addDataNodes(eventNode);
-                }
-                if (eventDescriptor.equals("Executing") || eventDescriptor.equals("Complete")) { 
-                    if(eventHasLogEntries) {
+                    if(hasData) {
                         addDataNodes(eventNode);
                     }
                 }

@@ -373,9 +373,6 @@ public class YXESBuilder {
     
         XNode eventDataItems = extractDataEvents(taskInstance);
     
-        XNode dataChanges = eventDataItems.getChild("dvcDataItems");
-        XNode dataExecution = eventDataItems.getChild("excecutingDataItems");
-        XNode dataComplete = eventDataItems.getChild("completeDataItems");
     
         for (XNode event: taskInstance.getChildren("event")) {
             String descriptor = getDescriptor(event);
@@ -383,26 +380,20 @@ public class YXESBuilder {
                 continue;
             }
             if (!descriptor.equals("DataValueChange")) {
-                XNode node = eventNode(event, taskName, instanceID);
-
-                if (descriptor.equals("Executing")) {
-                    addDataEvents(node, dataChanges.getChild("input"));
-                    addDataEvents(node, dataExecution);
-                } 
                 
-                if (descriptor.equals("Complete")) {
-                    addDataEvents(node, dataChanges.getChild("output"));
-                    addDataEvents(node, dataComplete);
+                if(isTraceData(descriptor)) {
+                    addLogsToTrace(descriptor, trace, eventDataItems);
+                    continue;
                 }
+                   
+                XNode node = eventNode(event, taskName, instanceID);
+                addDataToEventNode(descriptor, node, eventDataItems);
                 trace.addChild(node);
             }
         }
     }
-    
-    private boolean hasLogEntries(XNode dataXNode) {
-        return dataXNode.hasChild("output");
-    }
-    
+
+
     private XNode extractDataEvents(XNode taskInstance) {
         XNode data = new XNode("eventData");
 
@@ -413,6 +404,8 @@ public class YXESBuilder {
         XNode execDataItems = data.addChild("excecutingDataItems");
         XNode complDataItems = data.addChild("completeDataItems");
 
+        XNode caseStartDataItems = data.addChild("caseStartDataItems");
+        XNode caseComplDataItems = data.addChild("caseComplDataItems");
 
         for (XNode event: taskInstance.getChildren("event")) {
             if (event.hasChild("dataItems")) {
@@ -431,10 +424,55 @@ public class YXESBuilder {
                     case "Complete":
                         addLogEntry(items, complDataItems);
                         break;
+                    
+                    case "CaseStart":
+                        addLogEntry(items, caseStartDataItems);
+                        break;
+
+                    case "CaseComplete":
+                        addLogEntry(items, caseComplDataItems);
+                        break;
                 }
             }
         }
         return data;
+    }
+
+    private boolean isTraceData(String descriptor) {
+        return (descriptor.equals("CaseStart") || descriptor.equals("CaseComplete"));
+    }
+
+    private void addLogsToTrace(String descriptor, XNode trace, XNode eventDataItems) {
+        XNode dataCaseStartLog = eventDataItems.getChild("caseStartDataItems");
+        XNode dataCaseComplLog = eventDataItems.getChild("caseComplDataItems");
+
+        if (descriptor.equals("CaseStart")) {
+            addChildToTrace(trace, descriptor, getTraceLogValue(dataCaseStartLog));
+         } 
+         if (descriptor.equals("CaseComplete")) {
+            addChildToTrace(trace, descriptor, getTraceLogValue(dataCaseComplLog));
+          } 
+    }
+
+    private void addChildToTrace(XNode trace, String key, String value) {
+        if(value != null) {
+            trace.addChild(stringNode(key, value));
+        }
+    }
+
+    private void addDataToEventNode(String descriptor, XNode node, XNode eventDataItems) {
+        XNode dataChanges = eventDataItems.getChild("dvcDataItems");
+        XNode dataExecutionLog = eventDataItems.getChild("excecutingDataItems");
+        XNode dataCompleteLog = eventDataItems.getChild("completeDataItems");
+
+        if (descriptor.equals("Executing")) {
+            addDataEvents(node, dataChanges.getChild("input"));
+            addDataEvents(node, dataExecutionLog);
+        } 
+        if (descriptor.equals("Complete")) {
+            addDataEvents(node, dataChanges.getChild("output"));
+            addDataEvents(node, dataCompleteLog);
+        }
     }
 
     private void addDataValueChangedData(XNode items, XNode dvcDataItems) {
@@ -453,11 +491,16 @@ public class YXESBuilder {
     }
 
     private void addLogEntry(XNode item, XNode dataXNode){
-        if(!dataXNode.hasChild("dataItem")) {
-            XNode subitem = item.getChild("dataItem");
-            subitem.updateChildName("name", "logentry");
-            dataXNode.addChild(subitem);
-        }
+        XNode subitem = item.getChild("dataItem");
+        subitem.updateChildName("name", "logentry");
+        dataXNode.addChild(subitem);
     }
 
+    private String getTraceLogValue(XNode eventData) {
+        if(eventData.getChild("dataItem") != null) {
+            XNode di = eventData.getChild("dataItem");
+            return di.getChildText("value");
+        }
+        return null;
+    }
 }
