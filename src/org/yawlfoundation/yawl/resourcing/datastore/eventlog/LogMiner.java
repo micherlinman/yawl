@@ -23,11 +23,13 @@ import org.apache.logging.log4j.Logger;
 import org.jdom2.Element;
 import org.yawlfoundation.yawl.engine.YSpecificationID;
 import org.yawlfoundation.yawl.resourcing.ResourceManager;
+import org.yawlfoundation.yawl.resourcing.datastore.eventlog.EventLogger.event;
 import org.yawlfoundation.yawl.resourcing.datastore.persistence.Persister;
 import org.yawlfoundation.yawl.resourcing.resource.Participant;
 import org.yawlfoundation.yawl.util.JDOMUtil;
 import org.yawlfoundation.yawl.util.StringUtil;
 import org.yawlfoundation.yawl.util.XNode;
+import java.util.HashMap;
 
 import java.util.*;
 
@@ -873,12 +875,16 @@ public class LogMiner {
         XNode cases = new XNode("cases");
         XNode caseNode = null;
         long specKey = getSpecificationKey(specID);
+        HashMap<String, String> caseParticipants = new HashMap<>();
+
         if (specKey > -1) {
             String query = String.format(
                   "%s WHERE re._specKey=%d ORDER BY re._caseID, re._timeStamp",
                     _baseQuery, specKey);
 
             List rows = _reader.execQuery(query) ;
+            caseParticipants = fetchCaseParticipants(rows);
+
             String caseID = "-1";
             for (Object row : rows) {
                 ResourceEvent event = (ResourceEvent) row;
@@ -887,20 +893,54 @@ public class LogMiner {
                     caseNode = cases.addChild("case");
                     caseNode.addAttribute("id", caseID);
                 }
-
+          
                  // only want task events
                 if ((caseNode != null) && (event.get_taskID() != null)) {
+                    String userId = getEventUserIdFromMap(caseParticipants, event);
+
                     XNode eventNode = caseNode.addChild("event");
                     eventNode.addChild("taskname", event.get_taskID());
                     eventNode.addChild("instanceid", event.get_caseID());
                     eventNode.addChild("descriptor", event.get_event());
                     eventNode.addChild("timestamp", event.getTimeStampString());
-                    eventNode.addChild("resource", event.get_resourceID());
+                    eventNode.addChild("resource", userId);
                 }    
             }
             _reader.commit();
         }
         return cases;
+    }
+
+    private String getEventUserIdFromMap(HashMap<String, String> caseParticipants, ResourceEvent event){
+        String userId = caseParticipants.get(event.get_resourceID());
+        return userId == null ? event.get_resourceID() : userId;
+    }
+
+    private HashMap<String, String> fetchCaseParticipants(List caseEvents) {
+        HashMap<String, String> caseParticipants = new HashMap<>();
+
+        String query = generateParticipantQuery(caseEvents);
+        List rows = _reader.execQuery(query) ;
+        for (Object row : rows) {
+            Participant participant = (Participant) row;
+            caseParticipants.put(participant.getID(), participant.getUserID());
+        }
+        return caseParticipants;
+    }
+
+    private String generateParticipantQuery(List eventRows) {
+        String pa_query = "FROM Participant AS pa WHERE";
+
+        Iterator<Object> eventIterator = eventRows.iterator();
+        while (eventIterator.hasNext()) {
+            ResourceEvent event = (ResourceEvent) eventIterator.next();
+            pa_query = pa_query + " ParticipantID = '" + event.get_resourceID() + "'";
+
+            if(eventIterator.hasNext()){
+                pa_query += " or ";
+            }
+        }
+        return pa_query;
     }
 
 
